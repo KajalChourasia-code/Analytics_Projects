@@ -1,0 +1,116 @@
+CREATE DATABASE SUPPLYCHAIN_PROJECT;
+USE SUPPLYCHAIN_PROJECT;
+SHOW TABLES;
+
+#1 TOTAL ORDERS-------------
+SELECT COUNT(*) AS TOTAL_ORDERS
+FROM FACT_ORDERS;
+
+#2 TOTAL SALES REVENUE-----------
+SELECT 
+	ROUND(SUM(REVENUE),2) AS TOTAL_SALES_REVENUE
+FROM FACT_ORDERS;
+
+#3 AVERAGE FILL RATE (% of orders that a business can ship immediately from available stock without any backorders, stockouts, or delays)
+SELECT 
+	ROUND(AVG(Fill_Rate_Pct),2) AS 'AVG_FILL_RATE_%'
+FROM FACT_ORDERS;
+
+#4 ON-TIME DELIVERY %---------------
+SELECT 
+	ROUND(
+	(COUNT(DELIVERY_STATUS) / (SELECT COUNT(*) FROM FACT_ORDERS) * 100),2)
+    AS OTD_PERCENTAGE
+FROM FACT_ORDERS 
+	WHERE DELIVERY_STATUS="On-Time";
+
+#5 TOTAL STOCK ON HAND----------------
+SELECT 
+	SUM(STOCK_ON_HAND) AS TOTAL_STOCK_ON_HAND
+FROM FACT_INVENTORY;
+
+#6 AVERAGE LEAD TIME BY SHIP MODE (average number of days it takes for an order to be delivered)
+SELECT 
+	SHIP_MODE, 
+    ROUND(AVG(DATEDIFF(ACTUAL_DELIVERY_DATE, SHIP_DATE)),1) AS 'AVG LEAD TIME'
+FROM FACT_ORDERS GROUP BY SHIP_MODE ORDER BY 'AVG LEAD TIME' ASC;
+
+#7 ORDER BY SHIP MODE--------------------
+SELECT 
+	SHIP_MODE,
+	COUNT(*) AS TOTAL_ORDERS
+FROM FACT_ORDERS
+GROUP BY SHIP_MODE;
+
+#8 ORDER BY REGION-------------------
+DESC DIM_CUSTOMER; #( ï»¿Customer_ID)
+
+ALTER TABLE DIM_CUSTOMER 
+RENAME COLUMN ï»¿Customer_ID TO Customer_ID;
+
+SELECT 
+	D.CUSTOMER_REGION,
+	COUNT(*) AS TOTAL_ORDERS
+FROM DIM_CUSTOMER AS D
+JOIN FACT_ORDERS AS F
+	ON D.Customer_ID=F.Customer_ID
+GROUP BY D.CUSTOMER_REGION;
+
+#9 TOP 5 CITIES BY SALES REVENUE------------
+SELECT 
+	C.CUSTOMER_CITY,
+	F.REVENUE
+FROM DIM_CUSTOMER AS C
+JOIN FACT_ORDERS AS F
+	ON C.CUSTOMER_ID=F.CUSTOMER_ID
+    ORDER BY F.REVENUE DESC
+LIMIT 5;
+
+#10 YEAR-WISE, MONTH-WISE, SUM OF QUANTITY ORDERED (FORECAST VS ACTUAL DEMAND)-----------------
+SELECT 
+    MONTH(order_date) AS 'Month_no.',
+    MONTHNAME(order_date) AS 'Month_Name',
+    SUM(CASE WHEN YEAR(order_date) = 2023 THEN order_quantity ELSE 0 END) AS 'Forecasted_Demand_2023',
+    SUM(CASE WHEN YEAR(order_date) = 2024 THEN order_quantity ELSE 0 END) AS 'Actual_Demand_2024'
+FROM 
+    fact_orders
+GROUP BY 
+    MONTH(order_date), MONTHNAME(order_date)
+ORDER BY 
+    MONTH(order_date);
+
+#11 AVG DELAY DAYS------------------
+SELECT ROUND(AVG(DELAY_DAYS),2) AS 'AVG DELAY DAY(S)'
+FROM FACT_ORDERS;
+
+#12 UNITS ORDERED VS UNITS SHIPPED
+SELECT
+    SUM(Order_Quantity) AS Units_Ordered,
+    SUM(Shipped_Quantity) AS Units_Shipped
+FROM Fact_Orders;
+
+#13 TOTAL SHIPPING COST
+SELECT
+   ROUND(SUM(Shipping_Cost), 2) AS Total_Shipping_Cost
+FROM Fact_Orders;
+
+#14 GROSS PROFIT & GROSS MARGIN
+SELECT
+    ROUND(SUM(Revenue) - SUM(COGS) - SUM(Shipping_Cost), 2) AS Gross_Profit,
+    ROUND((SUM(Revenue) - SUM(COGS) - SUM(Shipping_Cost))/ SUM(Revenue) * 100,2) AS 'Gross_Margin_%'
+FROM Fact_Orders;
+
+#15 AVERAGE ORDER VALUE
+SELECT
+    ROUND(SUM(Revenue) / COUNT(DISTINCT Order_ID), 0) AS Avg_Order_Value
+FROM Fact_Orders;
+
+#16 TOTAL SUPPLY CHAIN COST
+SELECT CONCAT('$',FORMAT((SUM(COGS) + SUM(Shipping_Cost)) / 1000000, 2),'M') AS Total_Supply_Chain_Cost
+FROM Fact_Orders;
+
+#17 DELIVERY PERFORMANCE
+SELECT Delivery_Status, COUNT(DISTINCT Order_ID) AS Total_Orders
+FROM Fact_Orders
+GROUP BY Delivery_Status
+ORDER BY Total_Orders DESC;
